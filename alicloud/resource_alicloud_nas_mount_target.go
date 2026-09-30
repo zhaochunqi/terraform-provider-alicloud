@@ -29,6 +29,11 @@ func resourceAliCloudNasMountTarget() *schema.Resource {
 			"access_group_name": {
 				Type:     schema.TypeString,
 				Optional: true,
+				// The NAS API rejects standard/extreme mount targets created
+				// with an empty AccessGroupName (MissingParameter.AccessGroupName).
+				// The console defaults to the built-in per-account group, so
+				// do the same instead of sending an empty string.
+				Default: "DEFAULT_VPC_GROUP_NAME",
 			},
 			"dual_stack": {
 				Type:     schema.TypeBool,
