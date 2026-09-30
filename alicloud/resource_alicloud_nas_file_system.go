@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/PaesslerAG/jsonpath"
@@ -22,6 +23,7 @@ func resourceAliCloudNasFileSystem() *schema.Resource {
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
+		CustomizeDiff: capacityDriftForCapacityType,
 		Timeouts: &schema.ResourceTimeout{
 			Create: schema.DefaultTimeout(10 * time.Minute),
 			Update: schema.DefaultTimeout(10 * time.Minute),
@@ -236,6 +238,21 @@ func resourceAliCloudNasFileSystem() *schema.Resource {
 			},
 		},
 	}
+}
+
+// capacityDriftForCapacityType suppresses capacity diffs for Capacity storage
+// type. The NAS API does not honor the requested capacity for Capacity-type
+// file systems: it reports its own maximum (in MiB) on read regardless of the
+// value sent at create time. Combined with Optional+Computed, that makes the
+// configured value permanently diff against state and re-trigger an update on
+// every plan. Capacity for other storage types is still diffed and updatable.
+func capacityDriftForCapacityType(d *schema.ResourceDiff, v interface{}) error {
+	if strings.EqualFold(d.Get("storage_type").(string), "Capacity") {
+		if d.HasChange("capacity") {
+			return d.Clear("capacity")
+		}
+	}
+	return nil
 }
 
 func resourceAliCloudNasFileSystemCreate(d *schema.ResourceData, meta interface{}) error {
