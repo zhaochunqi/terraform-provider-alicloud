@@ -48,6 +48,14 @@ func resourceAliCloudNasMountTarget() *schema.Resource {
 				Optional: true,
 				ForceNew: true,
 				Computed: true,
+				// The API stores and returns "Vpc"/"Classic" regardless of the
+				// casing sent at create time ("VPC" is what the docs show).
+				// network_type is ForceNew, so any case mismatch between the
+				// configured value and the read-back value reads as drift and
+				// replaces the mount target on every plan. Normalize both.
+				StateFunc: func(v interface{}) string {
+					return normalizeNasNetworkType(v.(string))
+				},
 			},
 			"security_group_id": {
 				Type:     schema.TypeString,
@@ -161,7 +169,7 @@ func resourceAliCloudNasMountTargetRead(d *schema.ResourceData, meta interface{}
 	}
 
 	d.Set("access_group_name", objectRaw["AccessGroup"])
-	d.Set("network_type", objectRaw["NetworkType"])
+	d.Set("network_type", normalizeNasNetworkType(fmt.Sprint(objectRaw["NetworkType"])))
 	d.Set("status", objectRaw["Status"])
 	d.Set("vswitch_id", objectRaw["VswId"])
 	d.Set("vpc_id", objectRaw["VpcId"])
@@ -171,6 +179,17 @@ func resourceAliCloudNasMountTargetRead(d *schema.ResourceData, meta interface{}
 	d.Set("file_system_id", parts[0])
 
 	return nil
+}
+
+// normalizeNasNetworkType canonicalizes the casing the NAS API itself uses
+// ("Vpc", "Classic") so that differently-cased but semantically identical
+// values ("VPC", "vpc") do not diff against the read-back value.
+func normalizeNasNetworkType(v string) string {
+	s := strings.ToLower(strings.TrimSpace(v))
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func resourceAliCloudNasMountTargetUpdate(d *schema.ResourceData, meta interface{}) error {
