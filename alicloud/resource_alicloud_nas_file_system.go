@@ -353,8 +353,19 @@ func resourceAliCloudNasFileSystemRead(d *schema.ResourceData, meta interface{})
 	d.Set("resource_group_id", objectRaw["ResourceGroupId"])
 	d.Set("status", objectRaw["Status"])
 	d.Set("storage_type", objectRaw["StorageType"])
-	d.Set("vswitch_id", objectRaw["QuorumVswId"])
-	d.Set("vpc_id", objectRaw["VpcId"])
+	// DescribeFileSystems only returns QuorumVswId/VpcId for some file system
+	// types (e.g. extreme). For standard/Capacity file systems these keys are
+	// absent, and blindly setting them nils out the create-time values in
+	// state. Because both attributes are ForceNew, the missing values then
+	// show up as "+ vpc_id # forces replacement" on every plan, looping the
+	// resource through destroy/recreate forever. Only overwrite when the API
+	// actually returned a value.
+	if v, ok := objectRaw["QuorumVswId"]; ok && fmt.Sprint(v) != "" {
+		d.Set("vswitch_id", v)
+	}
+	if v, ok := objectRaw["VpcId"]; ok && fmt.Sprint(v) != "" {
+		d.Set("vpc_id", v)
+	}
 	d.Set("zone_id", objectRaw["ZoneId"])
 
 	optionsMaps := make([]map[string]interface{}, 0)
